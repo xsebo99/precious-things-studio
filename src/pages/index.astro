@@ -1,0 +1,1183 @@
+---
+const title = 'Precious Things Studio';
+const description = 'Precious Things Studio';
+// Site is served from a subfolder on GitHub Pages (see astro.config.mjs).
+const base = import.meta.env.BASE_URL;
+---
+
+<html lang="en" data-design="night">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+		<meta name="generator" content={Astro.generator} />
+		<meta name="description" content={description} />
+		<meta name="theme-color" content="#07060a" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<title>{title}</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Chakra+Petch:ital,wght@0,500;0,600;1,700&family=Outfit:wght@400;500&family=JetBrains+Mono:wght@800&family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap"
+			rel="stylesheet"
+		/>
+		<script is:inline>
+			// Restore the visitor's last design before first paint.
+			try {
+				const saved = localStorage.getItem('pts-design');
+				const root = document.documentElement;
+				// 'nebula' was merged into 'mosaic'.
+				const design = saved === 'nebula' ? 'mosaic' : saved;
+				if (['night', 'sun', 'mosaic', 'tiles', 'flip', 'ascii'].includes(design)) root.dataset.design = design;
+				root.dataset.family = ['mosaic', 'tiles'].includes(root.dataset.design) ? 'space' : '';
+			} catch {}
+		</script>
+	</head>
+	<body>
+		<canvas id="particles" aria-hidden="true"></canvas>
+		<div class="vignette" aria-hidden="true"></div>
+		<div class="beam" aria-hidden="true">
+			<div class="beam__glow"></div>
+			<div class="beam__haze"></div>
+			<div class="beam__core"></div>
+			<div class="beam__flare"></div>
+		</div>
+		<div class="grain" aria-hidden="true"></div>
+		<div class="trail" aria-hidden="true"></div>
+		<canvas class="scene scene--nebula" aria-hidden="true"></canvas>
+		<div class="scene scene--mosaic" aria-hidden="true"></div>
+		<div class="scene scene--tiles" aria-hidden="true"></div>
+		<div class="scene scene--flip" aria-hidden="true"></div>
+		<canvas class="scene scene--ascii" aria-hidden="true"></canvas>
+
+		<main class="stage">
+			<h1 class="name"><em>Precious Things</em> Studio<sup class="tm">TM</sup></h1>
+		</main>
+		<!-- White copy of the name, clipped to the trail photos (see trail.ts) -->
+		<div class="stage stage--reveal" aria-hidden="true">
+			<div class="name"><em>Precious Things</em> Studio<sup class="tm">TM</sup></div>
+		</div>
+
+		<nav class="links" aria-label="Primary">
+			<a href={`${base}about`}>About</a>
+			<span class="sep" aria-hidden="true"></span>
+			<a href={`${base}projects`}>Projects</a>
+			<span class="sep" aria-hidden="true"></span>
+			<a href={`${base}privacy`}>Privacy</a>
+		</nav>
+
+		<button class="switch switch--prev" type="button" aria-label="Previous design">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+		</button>
+		<button class="switch switch--next" type="button" aria-label="Next design">
+			<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+		</button>
+		<p class="credit" aria-live="polite"></p>
+		<div class="curtain" aria-hidden="true"></div>
+
+		<script>
+			import { initParticles } from '../scripts/particles';
+			import { initTrail } from '../scripts/trail';
+			import { initMosaic } from '../scripts/mosaic';
+			import { initNebula } from '../scripts/nebula';
+			import { initTiles } from '../scripts/tiles';
+			import { initFlipboard } from '../scripts/flipboard';
+			import { initAscii } from '../scripts/ascii';
+
+			const DESIGNS = ['night', 'sun', 'mosaic', 'tiles', 'flip', 'ascii'] as const;
+			type Design = (typeof DESIGNS)[number];
+			type Scene = { pause(): void; resume(): void };
+
+			const THEME_COLORS: Record<Design, string> = {
+				night: '#07060a',
+				sun: '#e4c03f',
+				mosaic: '#05030a',
+				tiles: '#0b0b0e',
+				flip: '#000000',
+				ascii: '#faf9f5',
+			};
+			// Webb images are CC BY 4.0 — full credits in public/space/CREDITS.md
+			const CREDITS: Partial<Record<Design, string>> = {
+				mosaic: 'Herbig-Haro 46/47 — NASA, ESA, CSA, J. DePasquale (STScI)',
+				tiles: 'Images: NASA, ESA, CSA, STScI (James Webb Space Telescope)',
+			};
+
+			const BASE = import.meta.env.BASE_URL;
+			const root = document.documentElement;
+			const $ = <T extends Element>(sel: string) => document.querySelector(sel) as T;
+
+			const trail = initTrail(
+				$<HTMLElement>('.trail'),
+				// New York photos from Unsplash — credits in public/trail/CREDITS.md
+				Array.from({ length: 10 }, (_, i) => `${BASE}trail/ny-${String(i + 1).padStart(2, '0')}.jpg`),
+				$<HTMLElement>('.stage--reveal'),
+			);
+
+			// Each design starts the first time it's shown; the others pause meanwhile.
+			const factories: Record<Design, () => Scene> = {
+				night: () => initParticles($<HTMLCanvasElement>('#particles')),
+				sun: () => ({ resume: () => trail.setEnabled(true), pause: () => trail.setEnabled(false) }),
+				// The photo mosaic floats in front of the live nebula.
+				mosaic: () => {
+					let nebula: Scene | null = null;
+					try {
+						nebula = initNebula($<HTMLCanvasElement>('.scene--nebula'));
+					} catch (err) {
+						console.warn('Nebula unavailable, showing the mosaic alone:', err);
+					}
+					const mosaic = initMosaic($<HTMLElement>('.scene--mosaic'), `${BASE}space/hh4647.jpg`);
+					return {
+						resume() {
+							nebula?.resume();
+							mosaic.resume();
+						},
+						pause() {
+							nebula?.pause();
+							mosaic.pause();
+						},
+					};
+				},
+				tiles: () =>
+					initTiles($<HTMLElement>('.scene--tiles'), [
+						{ src: `${BASE}space/cliffs.jpg`, width: 2400, height: 1390 },
+						{ src: `${BASE}space/hh4647.jpg`, width: 2400, height: 1398 },
+						{ src: `${BASE}space/pillars.jpg`, width: 2400, height: 2503 },
+						{ src: `${BASE}space/rho-oph.jpg`, width: 2400, height: 2248 },
+						{ src: `${BASE}space/deep-field.jpg`, width: 2400, height: 2449 },
+					]),
+				flip: () => initFlipboard($<HTMLElement>('.scene--flip')),
+				ascii: () => initAscii($<HTMLCanvasElement>('.scene--ascii')),
+			};
+			const scenes = new Map<Design, Scene | null>();
+			function scene(design: Design) {
+				if (!scenes.has(design)) {
+					try {
+						scenes.set(design, factories[design]());
+					} catch (err) {
+						// e.g. no WebGL — the name still stands on its own.
+						console.warn(`Design "${design}" unavailable:`, err);
+						scenes.set(design, null);
+					}
+				}
+				return scenes.get(design);
+			}
+
+			function apply(design: Design) {
+				root.dataset.design = design;
+				root.dataset.family = ['mosaic', 'tiles'].includes(design) ? 'space' : '';
+				for (const [d, s] of scenes) if (d !== design) s?.pause();
+				scene(design)?.resume();
+				$<HTMLElement>('.credit').textContent = CREDITS[design] ?? '';
+				document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_COLORS[design]);
+				try {
+					localStorage.setItem('pts-design', design);
+				} catch {}
+			}
+
+			let index = Math.max(0, DESIGNS.indexOf(root.dataset.design as Design));
+			apply(DESIGNS[index]);
+
+			// Fade to the old background, swap, then reveal the new design.
+			let switching = false;
+			function go(step: number) {
+				if (switching) return;
+				switching = true;
+				index = (index + step + DESIGNS.length) % DESIGNS.length;
+				root.classList.add('is-switching');
+				setTimeout(() => {
+					apply(DESIGNS[index]);
+					requestAnimationFrame(() => {
+						root.classList.remove('is-switching');
+						switching = false;
+					});
+				}, 320);
+			}
+
+			document.querySelector('.switch--prev')?.addEventListener('click', () => go(-1));
+			document.querySelector('.switch--next')?.addEventListener('click', () => go(1));
+			window.addEventListener('keydown', (e) => {
+				if (e.altKey || e.ctrlKey || e.metaKey) return;
+				if (e.key === 'ArrowLeft') go(-1);
+				if (e.key === 'ArrowRight') go(1);
+			});
+		</script>
+	</body>
+</html>
+
+<style is:global>
+	:root {
+		--bg: #07060a;
+		--ink: #f4ede4;
+	}
+
+	* {
+		margin: 0;
+		padding: 0;
+		box-sizing: border-box;
+	}
+
+	html,
+	body {
+		height: 100%;
+		overflow: hidden;
+		background: radial-gradient(ellipse at 50% 45%, #15121c 0%, var(--bg) 70%);
+		color: var(--ink);
+		-webkit-font-smoothing: antialiased;
+	}
+
+	body {
+		cursor: crosshair;
+		user-select: none;
+	}
+
+	#particles {
+		position: fixed;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		display: block;
+		opacity: 0;
+		transition: opacity 2.4s ease;
+	}
+
+	#particles.is-ready {
+		opacity: 1;
+	}
+
+	.vignette {
+		position: fixed;
+		inset: 0;
+		pointer-events: none;
+		background: radial-gradient(ellipse at center, transparent 45%, rgba(7, 6, 10, 0.85) 100%);
+	}
+
+	/* Light beam — driven by --beam (intensity) and --beam-spread from particles.ts */
+	.beam {
+		position: fixed;
+		inset: 0;
+		pointer-events: none;
+		mix-blend-mode: screen;
+		opacity: var(--beam, 0);
+		overflow: hidden;
+	}
+
+	.beam > div {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%) scaleX(var(--beam-spread, 0));
+	}
+
+	.beam__core {
+		width: 130vw;
+		height: 2px;
+		background: linear-gradient(90deg, transparent 0%, rgba(255, 236, 205, 0.6) 25%, #fffaf2 50%, rgba(255, 236, 205, 0.6) 75%, transparent 100%);
+	}
+
+	.beam__haze {
+		width: 130vw;
+		height: 14px;
+		filter: blur(6px);
+		background: linear-gradient(90deg, transparent 0%, rgba(232, 201, 155, 0.5) 30%, rgba(255, 240, 215, 0.9) 50%, rgba(232, 201, 155, 0.5) 70%, transparent 100%);
+	}
+
+	.beam__glow {
+		width: 140vw;
+		height: 42vh;
+		background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(232, 201, 155, 0.32) 0%, rgba(185, 167, 232, 0.12) 40%, transparent 70%);
+	}
+
+	.beam__flare {
+		width: 46vmin;
+		height: 46vmin;
+		transform: translate(-50%, -50%) scale(calc(0.6 + var(--beam, 0) * 0.4));
+		background: radial-gradient(circle, rgba(255, 250, 240, 0.55) 0%, rgba(232, 201, 155, 0.18) 28%, transparent 62%);
+	}
+
+	.stage {
+		position: relative;
+		z-index: 1;
+		height: 100%;
+		display: grid;
+		place-items: center;
+		padding: 0 16px;
+		pointer-events: none;
+	}
+
+	.name {
+		font-family: 'Instrument Serif', 'Times New Roman', serif;
+		font-weight: 400;
+		font-size: clamp(2.6rem, 8.5vw, 8.5rem);
+		line-height: 0.95;
+		letter-spacing: -0.02em;
+		text-align: center;
+		text-shadow:
+			0 0 40px rgba(7, 6, 10, 0.9),
+			0 0 80px rgba(7, 6, 10, 0.6),
+			0 0 calc(var(--beam, 0) * 36px) rgba(255, 228, 190, calc(var(--beam, 0) * 0.45));
+		animation: rise 2s cubic-bezier(0.2, 0.7, 0.1, 1) 0.3s both;
+	}
+
+	.name em {
+		font-style: italic;
+		background: linear-gradient(100deg, #f4ede4 0%, #e8c99b 45%, #b9a7e8 100%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+		text-shadow: none;
+		padding-right: 0.05em;
+	}
+
+	@keyframes rise {
+		from {
+			opacity: 0;
+			transform: translateY(18px);
+			filter: blur(12px);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+			filter: blur(0);
+		}
+	}
+
+	.tm {
+		font-size: 0.13em;
+		letter-spacing: 0.12em;
+		vertical-align: top;
+		position: relative;
+		top: 1.1em;
+		margin-left: 0.35em;
+		color: #e8c99b;
+		opacity: 0.75;
+	}
+
+	/* Bottom links */
+	.links {
+		position: fixed;
+		z-index: 2;
+		left: 50%;
+		bottom: max(32px, env(safe-area-inset-bottom));
+		transform: translateX(-50%);
+		display: flex;
+		align-items: center;
+		gap: clamp(18px, 3vw, 34px);
+		font-family: 'Instrument Serif', 'Times New Roman', serif;
+		font-style: italic;
+		font-size: clamp(1rem, 1.3vw, 1.2rem);
+		letter-spacing: 0.04em;
+		white-space: nowrap;
+		animation: fade-up 1.6s cubic-bezier(0.2, 0.7, 0.1, 1) 1.4s both;
+	}
+
+	.links a {
+		position: relative;
+		color: rgba(244, 237, 228, 0.55);
+		text-decoration: none;
+		cursor: pointer;
+		padding: 6px 2px;
+		text-shadow: 0 0 14px rgba(7, 6, 10, 0.95);
+		transition: color 0.5s ease, text-shadow 0.5s ease;
+	}
+
+	/* Hairline that grows from the centre, in the wordmark's gradient. */
+	.links a::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 2px;
+		height: 1px;
+		background: linear-gradient(90deg, transparent, #e8c99b 30%, #b9a7e8 70%, transparent);
+		transform: scaleX(0);
+		transition: transform 0.6s cubic-bezier(0.2, 0.7, 0.1, 1);
+	}
+
+	.links a:hover,
+	.links a:focus-visible {
+		color: #fffaf2;
+		text-shadow: 0 0 14px rgba(7, 6, 10, 0.95), 0 0 18px rgba(232, 201, 155, 0.55);
+	}
+
+	.links a:hover::after,
+	.links a:focus-visible::after {
+		transform: scaleX(1);
+	}
+
+	.links a:focus-visible {
+		outline: none;
+	}
+
+	/* Tiny gold diamond between links. */
+	.sep {
+		width: 4px;
+		height: 4px;
+		transform: rotate(45deg);
+		background: #e8c99b;
+		opacity: 0.45;
+	}
+
+	@keyframes fade-up {
+		from {
+			opacity: 0;
+			transform: translate(-50%, 10px);
+		}
+		to {
+			opacity: 1;
+			transform: translate(-50%, 0);
+		}
+	}
+
+	/* ---- Design switch arrows ---- */
+	.switch {
+		position: fixed;
+		z-index: 4;
+		top: 50%;
+		width: 52px;
+		height: 52px;
+		margin-top: -26px;
+		display: grid;
+		place-items: center;
+		border-radius: 50%;
+		border: 1px solid rgba(244, 237, 228, 0.22);
+		background: rgba(244, 237, 228, 0.03);
+		backdrop-filter: blur(6px);
+		color: rgba(244, 237, 228, 0.75);
+		cursor: pointer;
+		transition: color 0.4s ease, border-color 0.4s ease, background-color 0.4s ease, box-shadow 0.4s ease, transform 0.4s ease;
+		animation: fade-in 1.6s ease 1.6s both;
+	}
+
+	.switch--prev {
+		left: max(20px, 2.5vw);
+	}
+
+	.switch--next {
+		right: max(20px, 2.5vw);
+	}
+
+	.switch svg {
+		width: 18px;
+		height: 18px;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.5;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	.switch:hover,
+	.switch:focus-visible {
+		outline: none;
+		color: #fffaf2;
+		border-color: rgba(232, 201, 155, 0.7);
+		box-shadow: 0 0 24px rgba(232, 201, 155, 0.25);
+	}
+
+	.switch--prev:hover {
+		transform: translateX(-3px);
+	}
+
+	.switch--next:hover {
+		transform: translateX(3px);
+	}
+
+	/* Crossfade between designs */
+	.curtain {
+		position: fixed;
+		inset: 0;
+		z-index: 3;
+		pointer-events: none;
+		background: var(--bg);
+		opacity: 0;
+		transition: opacity 0.32s ease;
+	}
+
+	.is-switching .curtain {
+		opacity: 1;
+	}
+
+	/* Paper grain — only used by the matte design */
+	.grain {
+		position: fixed;
+		inset: 0;
+		pointer-events: none;
+		display: none;
+		opacity: 0.22;
+		mix-blend-mode: multiply;
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .7 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+	}
+
+	/* Cursor image trail */
+	.trail {
+		position: fixed;
+		inset: 0;
+		pointer-events: none;
+		overflow: hidden;
+	}
+
+	.trail__img {
+		position: absolute;
+		width: clamp(110px, 12vw, 190px);
+		aspect-ratio: 4 / 5;
+		object-fit: cover;
+		box-shadow: 0 18px 40px rgba(22, 20, 16, 0.25);
+		will-change: transform, opacity;
+		opacity: 0;
+	}
+
+	/* ---- Design: sun (matte yellow, sporty type) ---- */
+	[data-design='sun'] {
+		--bg: #e4c03f;
+		--ink: #161410;
+	}
+
+	[data-design='sun'],
+	[data-design='sun'] body {
+		background: var(--bg);
+	}
+
+	:root:not([data-design='night']) #particles,
+	:root:not([data-design='night']) .vignette,
+	:root:not([data-design='night']) .beam {
+		display: none;
+	}
+
+	[data-design='sun'] .grain {
+		display: block;
+	}
+
+	[data-design='sun'] .name {
+		font-family: 'Chakra Petch', 'Arial Narrow', sans-serif;
+		font-weight: 700;
+		font-style: italic;
+		font-size: clamp(2.4rem, 8vw, 8rem);
+		line-height: 0.92;
+		letter-spacing: -0.03em;
+		text-shadow: none;
+	}
+
+	[data-design='sun'] .name em {
+		font-style: inherit;
+		background: none;
+		color: inherit;
+		padding-right: 0;
+	}
+
+	/* White name over photos: only shown where trail images sit (clip-path set in trail.ts) */
+	.stage--reveal {
+		position: fixed;
+		inset: 0;
+		z-index: 2;
+		display: none;
+		clip-path: inset(100%);
+	}
+
+	[data-design='sun'] .stage--reveal {
+		display: grid;
+	}
+
+	/* Stays put, so it never replays the intro when the design switches. */
+	.stage--reveal .name {
+		animation: none;
+	}
+
+	[data-design='sun'] .stage--reveal,
+	[data-design='sun'] .stage--reveal .tm {
+		color: #fff;
+	}
+
+	[data-design='sun'] .tm {
+		color: var(--ink);
+		font-style: normal;
+		opacity: 0.8;
+	}
+
+	[data-design='sun'] .links {
+		font-family: 'Chakra Petch', 'Arial Narrow', sans-serif;
+		font-style: normal;
+		font-weight: 600;
+		font-size: 0.8rem;
+		text-transform: uppercase;
+		letter-spacing: 0.16em;
+	}
+
+	[data-design='sun'] .links a,
+	[data-design='sun'] .links a:hover,
+	[data-design='sun'] .links a:focus-visible {
+		text-shadow: none;
+	}
+
+	[data-design='sun'] .links a {
+		color: rgba(22, 20, 16, 0.65);
+	}
+
+	[data-design='sun'] .links a:hover,
+	[data-design='sun'] .links a:focus-visible {
+		color: var(--ink);
+	}
+
+	[data-design='sun'] .links a::after {
+		height: 2px;
+		background: var(--ink);
+	}
+
+	[data-design='sun'] .sep {
+		background: var(--ink);
+	}
+
+	[data-design='sun'] .switch {
+		border-radius: 0;
+		border: 2px solid var(--ink);
+		background: transparent;
+		backdrop-filter: none;
+		color: var(--ink);
+	}
+
+	[data-design='sun'] .switch svg {
+		stroke-width: 2.25;
+		stroke-linecap: square;
+		stroke-linejoin: miter;
+	}
+
+	[data-design='sun'] .switch:hover,
+	[data-design='sun'] .switch:focus-visible {
+		background: var(--ink);
+		color: var(--bg);
+		box-shadow: none;
+	}
+
+	/* ---- Space designs (mosaic in front of the nebula, tiles) ---- */
+	[data-design='mosaic'] {
+		--bg: #05030a;
+	}
+
+	[data-design='tiles'] {
+		--bg: #0b0b0e;
+	}
+
+	[data-family='space'] {
+		--ink: #fff;
+	}
+
+	[data-family='space'],
+	[data-family='space'] body {
+		background: var(--bg);
+	}
+
+	.scene {
+		position: fixed;
+		inset: 0;
+		display: none;
+	}
+
+	[data-design='mosaic'] .scene--mosaic,
+	[data-design='mosaic'] .scene--nebula,
+	[data-design='tiles'] .scene--tiles {
+		display: block;
+	}
+
+	[data-family='space'] .name {
+		font-family: 'Outfit', 'Helvetica Neue', sans-serif;
+		font-weight: 500;
+		font-style: normal;
+		font-size: clamp(2.4rem, 7vw, 7rem);
+		letter-spacing: -0.025em;
+		color: #fff;
+		text-shadow: 0 2px 30px rgba(0, 0, 0, 0.45), 0 0 60px rgba(0, 0, 0, 0.25);
+	}
+
+	[data-family='space'] .name em {
+		font-style: inherit;
+		background: none;
+		color: inherit;
+		padding-right: 0;
+	}
+
+	[data-family='space'] .tm {
+		color: #fff;
+		opacity: 0.7;
+	}
+
+	[data-family='space'] .links {
+		font-family: 'Outfit', 'Helvetica Neue', sans-serif;
+		font-style: normal;
+		font-size: 0.85rem;
+		letter-spacing: 0.06em;
+	}
+
+	[data-family='space'] .links a {
+		color: rgba(255, 255, 255, 0.6);
+	}
+
+	[data-family='space'] .links a:hover,
+	[data-family='space'] .links a:focus-visible {
+		color: #fff;
+		text-shadow: 0 0 14px rgba(0, 0, 0, 0.9), 0 0 18px rgba(170, 200, 255, 0.5);
+	}
+
+	[data-family='space'] .links a::after {
+		background: #fff;
+	}
+
+	[data-family='space'] .sep {
+		background: #fff;
+		opacity: 0.35;
+	}
+
+	[data-family='space'] .switch {
+		background: rgba(8, 8, 12, 0.4);
+		border-color: rgba(255, 255, 255, 0.3);
+		color: rgba(255, 255, 255, 0.85);
+	}
+
+	[data-family='space'] .switch:hover,
+	[data-family='space'] .switch:focus-visible {
+		color: #fff;
+		border-color: rgba(255, 255, 255, 0.7);
+		box-shadow: 0 0 24px rgba(170, 200, 255, 0.25);
+	}
+
+	.credit {
+		position: fixed;
+		z-index: 2;
+		right: 16px;
+		bottom: 12px;
+		max-width: calc(100vw - 32px);
+		font-family: 'Outfit', 'Helvetica Neue', sans-serif;
+		font-size: 10px;
+		letter-spacing: 0.04em;
+		color: rgba(255, 255, 255, 0.4);
+		text-align: right;
+		pointer-events: none;
+	}
+
+	/* Deep Field Mosaic */
+	.mosaic__band {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		width: min(92vw, 1280px);
+		aspect-ratio: 3 / 1;
+		transform: translate(-50%, -50%);
+	}
+
+	.mosaic__panel {
+		position: absolute;
+		overflow: hidden;
+		box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
+		will-change: transform;
+	}
+
+	.mosaic__img {
+		position: absolute;
+		background-size: cover;
+		background-position: center 48%;
+	}
+
+	.mosaic__stars {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+	}
+
+	/* Red lens flare: two crossing streaks and a hot core, centred on the name. */
+	.mosaic__flare {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		width: 120%;
+		height: 100%;
+		transform: translate(-50%, -50%);
+		opacity: 0;
+		pointer-events: none;
+		mix-blend-mode: screen;
+	}
+
+	.mosaic__flare i {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 50%;
+		height: 2px;
+		background: linear-gradient(90deg, transparent, rgba(255, 70, 70, 0.9) 45%, #fff 50%, rgba(255, 70, 70, 0.9) 55%, transparent);
+		filter: blur(0.5px);
+		box-shadow: 0 0 12px rgba(255, 60, 60, 0.6);
+	}
+
+	.mosaic__flare i:first-child {
+		transform: rotate(-24deg);
+	}
+
+	.mosaic__flare i:nth-child(2) {
+		transform: rotate(31deg);
+	}
+
+	.mosaic__flare b {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		width: 26%;
+		aspect-ratio: 1;
+		transform: translate(-50%, -50%);
+		background: radial-gradient(circle, rgba(255, 220, 220, 0.8) 0%, rgba(255, 70, 90, 0.35) 25%, transparent 65%);
+	}
+
+	@media (max-aspect-ratio: 1 / 1) {
+		.mosaic__band {
+			width: 88vw;
+			aspect-ratio: 3 / 4;
+		}
+	}
+
+	/* Nebula Engine */
+	.scene--nebula {
+		width: 100%;
+		height: 100%;
+	}
+
+	/* Telescope Tiles */
+	.tiles__grid {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		grid-template-columns: repeat(var(--cols, 6), 1fr);
+		grid-template-rows: repeat(var(--rows, 4), 1fr);
+		gap: 3px;
+		perspective: 1400px;
+	}
+
+	.tile {
+		position: relative;
+		filter: brightness(var(--b, 1));
+		transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), filter 0.5s ease;
+	}
+
+	.tile:hover {
+		z-index: 1;
+		transform: scale(1.06);
+		filter: brightness(calc(var(--b, 1) + 0.3));
+	}
+
+	.tile__inner {
+		position: absolute;
+		inset: 0;
+		transform-style: preserve-3d;
+		transition: transform 0.95s cubic-bezier(0.6, 0, 0.2, 1);
+	}
+
+	.tile.is-flipped .tile__inner {
+		transform: rotateY(180deg);
+	}
+
+	.tile__face {
+		position: absolute;
+		inset: 0;
+		backface-visibility: hidden;
+		background-repeat: no-repeat;
+		background-color: #050508;
+	}
+
+	.tile__face--back {
+		transform: rotateY(180deg);
+	}
+
+	/* Darken the middle a touch so the name stays readable over busy imagery. */
+	.scene--tiles::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		background: radial-gradient(ellipse 55% 35% at center, rgba(0, 0, 0, 0.45), transparent 75%);
+	}
+
+	/* ---- Design: flip (split-flap board) ---- */
+	[data-design='flip'] {
+		--bg: #000;
+		--ink: #ece3cf;
+		--gold: #c9a227;
+	}
+
+	[data-design='flip'],
+	[data-design='flip'] body {
+		background: var(--bg);
+	}
+
+	[data-design='flip'] .scene--flip {
+		display: block;
+	}
+
+	/* The board spells the name, so the heading stays for screen readers only. */
+	[data-design='flip'] .stage .name {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
+	}
+
+	/* The board covers the whole screen; flipboard.ts picks how many cells fit. */
+	.board {
+		position: absolute;
+		inset: 0;
+		background: #000;
+		cursor: pointer;
+	}
+
+	.board__grid {
+		height: 100%;
+		display: grid;
+		grid-template-columns: repeat(var(--cols, 22), 1fr);
+		grid-template-rows: repeat(var(--rows, 7), 1fr);
+		gap: 3px;
+	}
+
+	.flap {
+		--cell-bg: #191919;
+		position: relative;
+		perspective: 260px;
+		font-family: 'JetBrains Mono', ui-monospace, monospace;
+		font-weight: 800;
+		font-size: var(--font, 40px);
+		line-height: 1;
+		color: var(--ink);
+	}
+
+	.flap--alt {
+		--cell-bg: #222;
+	}
+
+	.flap__half {
+		position: absolute;
+		left: 0;
+		right: 0;
+		height: 50%;
+		overflow: hidden;
+		background: var(--cell-bg);
+		backface-visibility: hidden;
+	}
+
+	.flap__top {
+		top: 0;
+		border-radius: 3px 3px 0 0;
+		background-image: linear-gradient(rgba(255, 255, 255, 0.025), transparent);
+	}
+
+	.flap__bottom {
+		bottom: 0;
+		border-radius: 0 0 3px 3px;
+		background-image: linear-gradient(transparent, rgba(0, 0, 0, 0.18));
+	}
+
+	/* Each half holds the full glyph and shows only its own half of it. */
+	.flap__half span {
+		position: absolute;
+		left: 0;
+		right: 0;
+		height: 200%;
+		display: grid;
+		place-items: center;
+	}
+
+	.flap__top span {
+		top: 0;
+	}
+
+	.flap__bottom span {
+		bottom: 0;
+	}
+
+	.flap__leaf {
+		z-index: 2;
+		visibility: hidden;
+	}
+
+	.flap__leaf--top {
+		transform-origin: 50% 100%;
+	}
+
+	.flap__leaf--bottom {
+		transform-origin: 50% 0;
+	}
+
+	/* The hinge line across every cell */
+	.flap::after {
+		content: '';
+		position: absolute;
+		z-index: 3;
+		left: 0;
+		right: 0;
+		top: 50%;
+		height: 1px;
+		margin-top: -0.5px;
+		background: rgba(0, 0, 0, 0.9);
+		box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04);
+	}
+
+	[data-design='flip'] .links {
+		padding: 8px 18px;
+		border: 1px solid #222;
+		border-radius: 6px;
+		background: #000;
+		font-family: 'DM Mono', ui-monospace, monospace;
+		font-style: normal;
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.14em;
+	}
+
+	[data-design='flip'] .links a {
+		color: #8f8a80;
+		text-shadow: none;
+	}
+
+	[data-design='flip'] .links a:hover,
+	[data-design='flip'] .links a:focus-visible {
+		color: var(--ink);
+		text-shadow: none;
+	}
+
+	[data-design='flip'] .links a::after {
+		background: var(--gold);
+	}
+
+	[data-design='flip'] .sep {
+		background: var(--gold);
+		opacity: 0.7;
+	}
+
+	[data-design='flip'] .switch {
+		border-radius: 6px;
+		border: 1px solid #2a2a2a;
+		background: #141414;
+		backdrop-filter: none;
+		color: var(--ink);
+	}
+
+	[data-design='flip'] .switch:hover,
+	[data-design='flip'] .switch:focus-visible {
+		background: var(--gold);
+		border-color: var(--gold);
+		color: #111;
+		box-shadow: none;
+	}
+
+	/* ---- Design: ascii (faint character field on warm paper) ---- */
+	[data-design='ascii'] {
+		--bg: #faf9f5;
+		--ink: #1f1e1d;
+		--blue: #3f5fe8;
+	}
+
+	[data-design='ascii'],
+	[data-design='ascii'] body {
+		background: var(--bg);
+	}
+
+	[data-design='ascii'] body {
+		cursor: default;
+	}
+
+	[data-design='ascii'] .scene--ascii {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+
+	[data-design='ascii'] .name {
+		color: var(--ink);
+		text-shadow: 0 0 40px var(--bg), 0 0 80px var(--bg), 0 0 120px var(--bg);
+	}
+
+	[data-design='ascii'] .name em {
+		background: none;
+		color: inherit;
+	}
+
+	[data-design='ascii'] .tm {
+		color: var(--blue);
+		opacity: 0.8;
+	}
+
+	[data-design='ascii'] .links {
+		font-family: 'DM Mono', ui-monospace, monospace;
+		font-style: normal;
+		font-size: 0.78rem;
+		letter-spacing: 0.08em;
+	}
+
+	[data-design='ascii'] .links a {
+		color: rgba(31, 30, 29, 0.55);
+		text-shadow: 0 0 12px var(--bg), 0 0 12px var(--bg);
+	}
+
+	[data-design='ascii'] .links a:hover,
+	[data-design='ascii'] .links a:focus-visible {
+		color: var(--ink);
+		text-shadow: 0 0 12px var(--bg), 0 0 12px var(--bg);
+	}
+
+	[data-design='ascii'] .links a::after {
+		background: var(--blue);
+	}
+
+	[data-design='ascii'] .sep {
+		background: var(--blue);
+		opacity: 0.5;
+	}
+
+	[data-design='ascii'] .switch {
+		border-radius: 12px;
+		border: 1px solid rgba(31, 30, 29, 0.12);
+		background: rgba(255, 255, 255, 0.75);
+		backdrop-filter: blur(6px);
+		color: rgba(31, 30, 29, 0.7);
+		box-shadow: 0 1px 2px rgba(31, 30, 29, 0.04);
+	}
+
+	[data-design='ascii'] .switch:hover,
+	[data-design='ascii'] .switch:focus-visible {
+		color: var(--blue);
+		border-color: rgba(63, 95, 232, 0.4);
+		box-shadow: 0 4px 18px rgba(63, 95, 232, 0.12);
+	}
+
+	@keyframes fade-in {
+		from {
+			opacity: 0;
+		}
+	}
+
+	/* Keep the name clear of the arrows on narrow screens. */
+	@media (max-width: 700px) {
+		.stage {
+			padding: 0 64px;
+		}
+
+		.switch {
+			width: 42px;
+			height: 42px;
+			margin-top: -21px;
+		}
+
+		.switch--prev {
+			left: 12px;
+		}
+
+		.switch--next {
+			right: 12px;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.name,
+		.links,
+		.switch {
+			animation: none;
+		}
+	}
+</style>
