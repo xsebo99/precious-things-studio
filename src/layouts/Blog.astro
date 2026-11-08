@@ -1,0 +1,286 @@
+---
+// Shared shell for the projects blog: header with a terminal-style path, content column, footer.
+interface Props {
+	title: string;
+	description: string;
+	path: string; // shown in the header, e.g. "~/projects"
+}
+
+const { title, description, path } = Astro.props;
+const base = import.meta.env.BASE_URL;
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+		<meta name="generator" content={Astro.generator} />
+		<meta name="description" content={description} />
+		<meta name="theme-color" content="#faf9f5" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#121212" media="(prefers-color-scheme: dark)" />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<title>{title}</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500;700&display=swap"
+			rel="stylesheet"
+		/>
+	</head>
+	<body>
+		<header class="top">
+			<a class="prompt" href={base}>
+				<span class="prompt__user">precious-things</span><span class="prompt__sep">:</span><span class="prompt__path"
+					>{path}</span
+				><span class="prompt__caret" aria-hidden="true"></span>
+			</a>
+			<nav class="top__nav" aria-label="Primary">
+				<a href={`${base}projects`}>projects</a>
+				<a href={base}>home</a>
+			</nav>
+		</header>
+
+		<main class="page">
+			<slot />
+		</main>
+
+		<footer class="foot">
+			<span>© {new Date().getFullYear()} Precious Things Studio</span>
+			<span class="foot__built">built with astro · hosted on github pages</span>
+		</footer>
+	</body>
+</html>
+
+<style is:global>
+	:root {
+		--bg: #faf9f5;
+		--surface: #f1efe8;
+		--ink: #1f1e1d;
+		--muted: #6b6a66;
+		--faint: #a3a19a;
+		--line: #e4e1d8;
+		--accent: #3f5fe8;
+		--accent-soft: rgba(63, 95, 232, 0.1);
+		--ok: #2f8f5b;
+		--warn: #b7791f;
+		--mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+		--sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+		color-scheme: light;
+	}
+
+	@media (prefers-color-scheme: dark) {
+		:root {
+			--bg: #121212;
+			--surface: #1b1b1b;
+			--ink: #e8e6e1;
+			--muted: #9b9890;
+			--faint: #66645e;
+			--line: #2a2a2a;
+			--accent: #7d93ff;
+			--accent-soft: rgba(125, 147, 255, 0.12);
+			--ok: #5cc48a;
+			--warn: #e0a84a;
+			color-scheme: dark;
+		}
+
+		/* Shiki renders both themes; switch to the dark colours. */
+		.astro-code,
+		.astro-code span {
+			color: var(--shiki-dark) !important;
+			background-color: var(--shiki-dark-bg) !important;
+		}
+	}
+
+	*,
+	*::before,
+	*::after {
+		box-sizing: border-box;
+	}
+
+	body {
+		margin: 0;
+		min-height: 100vh;
+		display: flex;
+		flex-direction: column;
+		background: var(--bg);
+		color: var(--ink);
+		font-family: var(--sans);
+		font-size: 17px;
+		line-height: 1.7;
+		-webkit-font-smoothing: antialiased;
+	}
+
+	a {
+		color: inherit;
+	}
+
+	::selection {
+		background: var(--accent);
+		color: var(--bg);
+	}
+
+	/* ---- Header ---- */
+	.top {
+		width: 100%;
+		max-width: 760px;
+		margin: 0 auto;
+		padding: 28px 20px 0;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16px;
+		font-family: var(--mono);
+		font-size: 14px;
+	}
+
+	.prompt {
+		display: inline-flex;
+		align-items: center;
+		min-width: 0;
+		text-decoration: none;
+		white-space: nowrap;
+		overflow: hidden;
+	}
+
+	.prompt__user {
+		color: var(--ok);
+		font-weight: 700;
+	}
+
+	.prompt__sep {
+		color: var(--muted);
+	}
+
+	.prompt__path {
+		color: var(--accent);
+		font-weight: 500;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.prompt__caret {
+		flex: none;
+		width: 8px;
+		height: 1.15em;
+		margin-left: 4px;
+		background: var(--ink);
+		animation: blink 1.1s steps(1) infinite;
+	}
+
+	@keyframes blink {
+		50% {
+			opacity: 0;
+		}
+	}
+
+	.top__nav {
+		display: flex;
+		gap: 18px;
+		flex: none;
+	}
+
+	.top__nav a {
+		color: var(--muted);
+		text-decoration: none;
+	}
+
+	.top__nav a:hover,
+	.top__nav a:focus-visible {
+		color: var(--accent);
+	}
+
+	/* ---- Content column ---- */
+	.page {
+		flex: 1;
+		width: 100%;
+		max-width: 760px;
+		margin: 0 auto;
+		padding: 56px 20px 80px;
+	}
+
+	.foot {
+		width: 100%;
+		max-width: 760px;
+		margin: 0 auto;
+		padding: 24px 20px 40px;
+		border-top: 1px solid var(--line);
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 8px;
+		font-family: var(--mono);
+		font-size: 12px;
+		color: var(--faint);
+	}
+
+	/* ---- Shared bits ---- */
+	.tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		font-family: var(--mono);
+		font-size: 12px;
+	}
+
+	.tags li {
+		padding: 1px 8px;
+		border-radius: 4px;
+		background: var(--accent-soft);
+		color: var(--accent);
+	}
+
+	.status {
+		font-family: var(--mono);
+		font-size: 12px;
+		white-space: nowrap;
+	}
+
+	.status::before {
+		content: '';
+		display: inline-block;
+		width: 7px;
+		height: 7px;
+		margin-right: 6px;
+		border-radius: 50%;
+		background: currentColor;
+		vertical-align: 1px;
+	}
+
+	.status--shipped {
+		color: var(--ok);
+	}
+
+	.status--in-progress {
+		color: var(--warn);
+	}
+
+	.status--archived {
+		color: var(--faint);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.prompt__caret {
+			animation: none;
+		}
+	}
+
+	@media (max-width: 520px) {
+		body {
+			font-size: 16px;
+		}
+
+		.top {
+			padding-top: 20px;
+			font-size: 13px;
+		}
+
+		.page {
+			padding-top: 40px;
+		}
+	}
+</style>

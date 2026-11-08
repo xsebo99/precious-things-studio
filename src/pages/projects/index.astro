@@ -1,0 +1,153 @@
+---
+import Blog from '../../layouts/Blog.astro';
+import { getProjects, isoDate, readingTime, statusClass } from '../../lib/projects';
+
+const projects = await getProjects();
+const base = import.meta.env.BASE_URL;
+const tagCount = new Set(projects.flatMap((p) => p.data.tags)).size;
+---
+
+<Blog title="Projects — Precious Things Studio" description="Notes and write-ups on things we've built." path="~/projects">
+	<section class="intro">
+		<p class="cmd"><span class="cmd__dollar">$</span> ls -lt ~/projects</p>
+		<h1>Projects</h1>
+		<p class="lede">Write-ups on things we've built: what they do, how they work, and what we learned along the way.</p>
+		<p class="summary">{projects.length} {projects.length === 1 ? 'entry' : 'entries'} · {tagCount} tags</p>
+	</section>
+
+	<ol class="list">
+		{
+			projects.map((p) => (
+				<li class="item">
+					<a class="item__link" href={`${base}projects/${p.id}`}>
+						<div class="item__meta">
+							<time datetime={p.data.date.toISOString()}>{isoDate(p.data.date)}</time>
+							<span class={statusClass(p.data.status)}>{p.data.status}</span>
+							<span class="item__read">{readingTime(p.body)} min read</span>
+							{p.data.draft && <span class="item__draft">draft</span>}
+						</div>
+						<h2 class="item__title">{p.data.title}</h2>
+						<p class="item__desc">{p.data.description}</p>
+					</a>
+					{p.data.tags.length > 0 && (
+						<ul class="tags">
+							{p.data.tags.map((t) => (
+								<li>#{t}</li>
+							))}
+						</ul>
+					)}
+				</li>
+			))
+		}
+	</ol>
+
+	{projects.length === 0 && <p class="empty">Nothing here yet — check back soon.</p>}
+</Blog>
+
+<style>
+	.intro {
+		margin-bottom: 48px;
+	}
+
+	.cmd {
+		margin: 0 0 20px;
+		font-family: var(--mono);
+		font-size: 13px;
+		color: var(--muted);
+	}
+
+	.cmd__dollar {
+		color: var(--ok);
+		margin-right: 4px;
+	}
+
+	h1 {
+		margin: 0;
+		font-size: clamp(2.2rem, 6vw, 3rem);
+		line-height: 1.1;
+		font-weight: 600;
+		letter-spacing: -0.025em;
+	}
+
+	.lede {
+		margin: 14px 0 0;
+		max-width: 56ch;
+		color: var(--muted);
+	}
+
+	.summary {
+		margin: 18px 0 0;
+		font-family: var(--mono);
+		font-size: 12px;
+		color: var(--faint);
+	}
+
+	.list {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		border-top: 1px solid var(--line);
+	}
+
+	.item {
+		padding: 28px 0;
+		border-bottom: 1px solid var(--line);
+	}
+
+	.item__link {
+		display: block;
+		text-decoration: none;
+	}
+
+	.item__meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 16px;
+		font-family: var(--mono);
+		font-size: 12px;
+		color: var(--faint);
+	}
+
+	.item__draft {
+		padding: 0 6px;
+		border: 1px dashed var(--faint);
+		border-radius: 4px;
+	}
+
+	.item__title {
+		margin: 10px 0 6px;
+		font-size: 1.35rem;
+		line-height: 1.3;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+		transition: color 0.2s ease;
+	}
+
+	.item__title::after {
+		content: ' →';
+		color: var(--accent);
+		opacity: 0;
+		transition: opacity 0.2s ease, margin 0.2s ease;
+	}
+
+	.item__link:hover .item__title,
+	.item__link:focus-visible .item__title {
+		color: var(--accent);
+	}
+
+	.item__link:hover .item__title::after,
+	.item__link:focus-visible .item__title::after {
+		opacity: 1;
+	}
+
+	.item__desc {
+		margin: 0 0 14px;
+		color: var(--muted);
+	}
+
+	.empty {
+		font-family: var(--mono);
+		color: var(--muted);
+	}
+</style>

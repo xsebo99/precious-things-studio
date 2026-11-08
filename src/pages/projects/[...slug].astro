@@ -1,0 +1,329 @@
+---
+import { render } from 'astro:content';
+import Blog from '../../layouts/Blog.astro';
+import { getProjects, isoDate, readingTime, statusClass, type Project } from '../../lib/projects';
+
+export async function getStaticPaths() {
+	const projects = await getProjects();
+	return projects.map((project, i) => ({
+		params: { slug: project.id },
+		// Lists are newest first, so "newer" sits one step back.
+		props: { project, newer: projects[i - 1], older: projects[i + 1] },
+	}));
+}
+
+interface Props {
+	project: Project;
+	newer?: Project;
+	older?: Project;
+}
+
+const { project, newer, older } = Astro.props;
+const { data } = project;
+const { Content } = await render(project);
+const base = import.meta.env.BASE_URL;
+---
+
+<Blog title={`${data.title} — Precious Things Studio`} description={data.description} path={`~/projects/${project.id}.md`}>
+	<article>
+		<a class="back" href={`${base}projects`}>← all projects</a>
+
+		<header class="head">
+			<div class="meta">
+				<time datetime={data.date.toISOString()}>{isoDate(data.date)}</time>
+				<span class={statusClass(data.status)}>{data.status}</span>
+				<span>{readingTime(project.body)} min read</span>
+			</div>
+			<h1>{data.title}</h1>
+			<p class="lede">{data.description}</p>
+			{
+				data.tags.length > 0 && (
+					<ul class="tags">
+						{data.tags.map((t) => (
+							<li>#{t}</li>
+						))}
+					</ul>
+				)
+			}
+			{
+				(data.repo || data.live) && (
+					<div class="links">
+						{data.repo && (
+							<a class="btn" href={data.repo} rel="noopener">
+								<svg viewBox="0 0 16 16" aria-hidden="true">
+									<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+								</svg>
+								source
+							</a>
+						)}
+						{data.live && (
+							<a class="btn btn--primary" href={data.live} rel="noopener">
+								live site ↗
+							</a>
+						)}
+					</div>
+				)
+			}
+		</header>
+
+		<div class="prose">
+			<Content />
+		</div>
+	</article>
+
+	{
+		(newer || older) && (
+			<nav class="pager" aria-label="More projects">
+				{older ? (
+					<a href={`${base}projects/${older.id}`}>
+						<span>← older</span>
+						{older.data.title}
+					</a>
+				) : (
+					<span />
+				)}
+				{newer && (
+					<a class="pager__next" href={`${base}projects/${newer.id}`}>
+						<span>newer →</span>
+						{newer.data.title}
+					</a>
+				)}
+			</nav>
+		)
+	}
+</Blog>
+
+<style>
+	.back {
+		display: inline-block;
+		margin-bottom: 32px;
+		font-family: var(--mono);
+		font-size: 13px;
+		color: var(--muted);
+		text-decoration: none;
+	}
+
+	.back:hover,
+	.back:focus-visible {
+		color: var(--accent);
+	}
+
+	.head {
+		padding-bottom: 32px;
+		margin-bottom: 40px;
+		border-bottom: 1px solid var(--line);
+	}
+
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 16px;
+		font-family: var(--mono);
+		font-size: 12px;
+		color: var(--faint);
+	}
+
+	h1 {
+		margin: 14px 0 0;
+		font-size: clamp(2rem, 5.5vw, 2.75rem);
+		line-height: 1.12;
+		font-weight: 600;
+		letter-spacing: -0.025em;
+	}
+
+	.lede {
+		margin: 14px 0 20px;
+		font-size: 1.1rem;
+		color: var(--muted);
+	}
+
+	.links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		margin-top: 24px;
+	}
+
+	.btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		padding: 7px 14px;
+		border: 1px solid var(--line);
+		border-radius: 6px;
+		background: var(--surface);
+		font-family: var(--mono);
+		font-size: 13px;
+		text-decoration: none;
+		transition: border-color 0.2s ease, color 0.2s ease;
+	}
+
+	.btn svg {
+		width: 15px;
+		height: 15px;
+		fill: currentColor;
+	}
+
+	.btn:hover,
+	.btn:focus-visible {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.btn--primary {
+		background: var(--accent);
+		border-color: var(--accent);
+		color: var(--bg);
+	}
+
+	.btn--primary:hover,
+	.btn--primary:focus-visible {
+		color: var(--bg);
+		opacity: 0.9;
+	}
+
+	/* ---- Markdown body ---- */
+	.prose :global(h2) {
+		margin: 2.2em 0 0.6em;
+		font-size: 1.45rem;
+		line-height: 1.3;
+		font-weight: 600;
+		letter-spacing: -0.01em;
+	}
+
+	.prose :global(h2)::before {
+		content: '## ';
+		font-family: var(--mono);
+		font-weight: 400;
+		color: var(--faint);
+	}
+
+	.prose :global(h3) {
+		margin: 1.8em 0 0.5em;
+		font-size: 1.15rem;
+		font-weight: 600;
+	}
+
+	.prose :global(p),
+	.prose :global(ul),
+	.prose :global(ol) {
+		margin: 0 0 1.2em;
+	}
+
+	.prose :global(li) {
+		margin-bottom: 0.4em;
+	}
+
+	.prose :global(a) {
+		color: var(--accent);
+		text-decoration: underline;
+		text-decoration-thickness: 1px;
+		text-underline-offset: 3px;
+	}
+
+	.prose :global(strong) {
+		font-weight: 600;
+	}
+
+	.prose :global(:not(pre) > code) {
+		padding: 0.1em 0.4em;
+		border-radius: 4px;
+		background: var(--surface);
+		border: 1px solid var(--line);
+		font-family: var(--mono);
+		font-size: 0.85em;
+	}
+
+	.prose :global(pre) {
+		margin: 0 0 1.5em;
+		padding: 18px 20px;
+		border-radius: 8px;
+		border: 1px solid var(--line);
+		overflow-x: auto;
+		font-family: var(--mono);
+		font-size: 13.5px;
+		line-height: 1.65;
+	}
+
+	.prose :global(pre code) {
+		font-family: inherit;
+	}
+
+	.prose :global(blockquote) {
+		margin: 0 0 1.2em;
+		padding: 2px 0 2px 18px;
+		border-left: 3px solid var(--accent);
+		color: var(--muted);
+	}
+
+	.prose :global(table) {
+		width: 100%;
+		margin: 0 0 1.5em;
+		border-collapse: collapse;
+		font-size: 15px;
+		display: block;
+		overflow-x: auto;
+	}
+
+	.prose :global(th),
+	.prose :global(td) {
+		padding: 8px 12px;
+		border-bottom: 1px solid var(--line);
+		text-align: left;
+		vertical-align: top;
+	}
+
+	.prose :global(th) {
+		font-family: var(--mono);
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--muted);
+	}
+
+	.prose :global(img) {
+		max-width: 100%;
+		height: auto;
+		border-radius: 8px;
+	}
+
+	.prose :global(hr) {
+		margin: 2.5em 0;
+		border: 0;
+		border-top: 1px solid var(--line);
+	}
+
+	/* ---- Older / newer ---- */
+	.pager {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 16px;
+		margin-top: 64px;
+		padding-top: 28px;
+		border-top: 1px solid var(--line);
+	}
+
+	.pager a {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-weight: 500;
+		text-decoration: none;
+	}
+
+	.pager a span {
+		font-family: var(--mono);
+		font-size: 12px;
+		font-weight: 400;
+		color: var(--faint);
+	}
+
+	.pager a:hover,
+	.pager a:focus-visible {
+		color: var(--accent);
+	}
+
+	.pager__next {
+		text-align: right;
+	}
+</style>
